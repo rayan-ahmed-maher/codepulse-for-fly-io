@@ -16,7 +16,7 @@ from services.deployment import DeploymentOrchestrator
 
 async def main():
     project_path = "uploads/codepulse-for-fly-io/untd-prjt/backend"
-    project_name = "codepulse-render-test"
+    project_name = "codepulse-render-test-2"
     framework = "fastapi"
 
     # -- PRE-DEPLOYMENT STEPS (replicated from deploy route) --
