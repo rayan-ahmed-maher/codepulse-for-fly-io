@@ -343,16 +343,16 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
         if not final_url:
             raise Exception(f"Deployment failed: no URL returned by {req.platform}")
 
-        # Poll for completion if Vercel
-        if req.platform == "Vercel" and result.get("deployment_id"):
+        # Poll for completion if Vercel or Render
+        if req.platform in ("Vercel", "Render") and result.get("deployment_id"):
             if db_deploy_id:
-                await db.add_build_log(db_deploy_id, "INFO", "Polling Vercel for ready state...")
-            poll = await orchestrator.poll_status("Vercel", result["deployment_id"])
+                await db.add_build_log(db_deploy_id, "INFO", f"Polling {req.platform} for ready state...")
+            poll = await orchestrator.poll_status(req.platform, result["deployment_id"])
             result.update(poll)
             final_url = result.get("url", final_url)
             
             if not final_url:
-                raise Exception("Deployment failed: Vercel returned success but no URL after polling")
+                raise Exception(f"Deployment failed: {req.platform} returned success but no URL after polling")
 
         # STRICT: only set READY if we have a confirmed URL
         if final_url:
