@@ -258,6 +258,17 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
             await db.add_build_log(db_deploy_id, "INFO", "Pushing project to GitHub...")
         await deployment_store.update(tracking_id, {"status": "PUSHING_TO_GITHUB"})
 
+        # STEP 3: Verify files exist before pushing
+        print(f"Verifying project_path for git push: {req.project_path}")
+        logger.info(f"[DEPLOY] Verifying project_path for git push: {req.project_path}")
+        
+        if is_python:
+            req_file_check = Path(req.project_path) / 'requirements.txt'
+            assert req_file_check.exists(), f"requirements.txt not found at {req_file_check}!"
+            req_contents = req_file_check.read_text()
+            print(f"requirements.txt contents:\n{req_contents}")
+            logger.info(f"[DEPLOY] requirements.txt exists with {len(req_contents)} bytes")
+
         github_result = await github_push.push_project(req.project_path, req.project_name)
         if "error" in github_result:
             err = f"GitHub push failed: {github_result['error']}"
