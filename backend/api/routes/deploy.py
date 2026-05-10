@@ -195,11 +195,38 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
         if is_python:
             req_file = proj_path / "requirements.txt"
             if not req_file.exists():
-                logger.info("[DEPLOY] Missing requirements.txt, auto-generating with pipreqs...")
+                logger.info("⚠ requirements.txt missing — auto-generated before deployment")
                 if db_deploy_id:
-                    await db.add_build_log(db_deploy_id, "INFO", "Auto-generating requirements.txt...")
-                import subprocess
-                subprocess.run(f'pip install pipreqs && pipreqs "{proj_path}" --force', shell=True)
+                    await db.add_build_log(db_deploy_id, "INFO", "⚠ requirements.txt missing — auto-generated before deployment")
+                
+                # Custom Python scanner
+                import re
+                detected_packages = set()
+                import_pattern = re.compile(r'^\s*(?:import|from)\s+([a-zA-Z0-9_]+)')
+                
+                for py_file in proj_path.rglob("*.py"):
+                    if "venv" in py_file.parts or ".venv" in py_file.parts or "node_modules" in py_file.parts:
+                        continue
+                    try:
+                        content = py_file.read_text(encoding="utf-8")
+                        for line in content.splitlines():
+                            match = import_pattern.match(line)
+                            if match:
+                                pkg = match.group(1)
+                                if pkg not in ("os", "sys", "re", "math", "time", "datetime", "json", "pathlib", "logging", "asyncio", "typing", "collections", "itertools", "functools", "random", "subprocess", "shutil"):
+                                    detected_packages.add(pkg.replace("_", "-"))
+                    except Exception:
+                        pass
+                
+                # Framework minimums
+                if fw == "fastapi":
+                    detected_packages.update(["fastapi", "uvicorn[standard]", "python-multipart"])
+                elif fw == "flask":
+                    detected_packages.update(["flask", "gunicorn"])
+                elif fw == "django":
+                    detected_packages.update(["django", "gunicorn"])
+                    
+                req_file.write_text("\n".join(sorted(detected_packages)))
 
             if not req_file.exists():
                 err = "Missing requirements.txt — Render cannot install Python dependencies without it, and auto-generation failed."

@@ -16,7 +16,7 @@ from services.deployment import DeploymentOrchestrator
 
 async def main():
     project_path = "uploads/codepulse-for-fly-io/untd-prjt/backend"
-    project_name = "codepulse-render-test-2"
+    project_name = "codepulse-render-test-3"
     framework = "fastapi"
 
     # -- PRE-DEPLOYMENT STEPS (replicated from deploy route) --
@@ -51,11 +51,40 @@ async def main():
     
     # 3. requirements.txt
     req_file = proj_path / "requirements.txt"
+    # force delete if exists for testing
+    if req_file.exists():
+        req_file.unlink()
+        
     if not req_file.exists():
-        print("Missing requirements.txt, auto-generating with pipreqs...")
-        subprocess.run(f'pip install pipreqs && pipreqs "{proj_path}" --force', shell=True)
-    else:
-        print("requirements.txt already exists, keeping it.")
+        print("⚠ requirements.txt missing — auto-generated before deployment")
+        
+        # Custom Python scanner
+        import re
+        detected_packages = set()
+        import_pattern = re.compile(r'^\s*(?:import|from)\s+([a-zA-Z0-9_]+)')
+        
+        for py_file in proj_path.rglob("*.py"):
+            if "venv" in py_file.parts or ".venv" in py_file.parts or "node_modules" in py_file.parts:
+                continue
+            try:
+                content = py_file.read_text(encoding="utf-8")
+                for line in content.splitlines():
+                    match = import_pattern.match(line)
+                    if match:
+                        pkg = match.group(1)
+                        if pkg not in ("os", "sys", "re", "math", "time", "datetime", "json", "pathlib", "logging", "asyncio", "typing", "collections", "itertools", "functools", "random", "subprocess", "shutil"):
+                            detected_packages.add(pkg.replace("_", "-"))
+            except Exception:
+                pass
+        
+        # Framework minimums
+        if framework == "fastapi":
+            detected_packages.update(["fastapi", "uvicorn[standard]", "python-multipart"])
+        elif framework == "flask":
+            detected_packages.update(["flask", "gunicorn"])
+            
+        req_file.write_text("\n".join(sorted(detected_packages)))
+        print("Generated requirements.txt:\n" + req_file.read_text())
 
     print("\n" + "=" * 60)
     print(f"STEP 1: Push to GitHub")
