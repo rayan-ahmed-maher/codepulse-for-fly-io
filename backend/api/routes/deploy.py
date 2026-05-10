@@ -298,10 +298,27 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
             await db.add_build_log(db_deploy_id, "INFO", f"Deploying to Render from {repo_url}...")
 
         # Step 3: Deploy to Render using the GitHub repo URL
+        # Render needs the correct rootDir if the code is in a subfolder (like /backend)
+        render_root_dir = ""
+        curr = Path(req.project_path)
+        for _ in range(3):
+            if curr == curr.parent: break
+            if (curr.parent / ".git").exists():
+                render_root_dir = str(Path(req.project_path).relative_to(curr.parent)).replace('\\', '/')
+                break
+            curr = curr.parent
+            
+        if not render_root_dir and Path(req.project_path).name in ["backend", "api", "server"]:
+            render_root_dir = Path(req.project_path).name
+            
+        if render_root_dir:
+            logger.info(f"[DEPLOY] Detected subfolder repository structure. Passing rootDir: {render_root_dir} to Render.")
+
         result = await orchestrator.deploy_to_render(
             project_name=req.project_name,
             repo_url=repo_url,
             framework=fw,
+            root_dir=render_root_dir
         )
     else:
         err = f"Unknown platform: {req.platform}. Choose Vercel, Netlify, Cloudflare, or Render."

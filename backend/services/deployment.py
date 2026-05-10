@@ -1195,7 +1195,8 @@ class DeploymentOrchestrator:
         self,
         project_name: str,
         repo_url: str = "",
-        framework: str = ""
+        framework: str = "",
+        root_dir: str = ""
     ) -> dict:
 
         if not settings.RENDER_API_KEY:
@@ -1292,23 +1293,27 @@ class DeploymentOrchestrator:
             sanitized_name = f"{sanitized_name}-{suffix}"
             logger.info(f"[RENDER] Creating new service with unique name: {sanitized_name}")
 
+            service_details = {
+                "runtime": env,
+                "plan": "free",
+                "region": "oregon",
+                "buildCommand": build_cmd,
+                "startCommand": start_cmd,
+                "envSpecificDetails": {
+                    "buildCommand": build_cmd,
+                    "startCommand": start_cmd
+                }
+            }
+            if root_dir:
+                service_details["rootDir"] = root_dir
+
             payload = {
                 "type": "web_service",
                 "name": sanitized_name,
                 "ownerId": settings.RENDER_OWNER_ID,
                 "repo": repo_url,
                 "branch": "main",
-                "serviceDetails": {
-                    "runtime": env,
-                    "plan": "free",
-                    "region": "oregon",
-                    "buildCommand": build_cmd,
-                    "startCommand": start_cmd,
-                    "envSpecificDetails": {
-                        "buildCommand": build_cmd,
-                        "startCommand": start_cmd
-                    }
-                }
+                "serviceDetails": service_details
             }
 
             logger.info(f"[RENDER] Creating service: {sanitized_name} from {repo_url} (env={env})")
