@@ -1125,35 +1125,8 @@ class DeploymentOrchestrator:
                         return {"status": state.lower(), "url": url, "raw": data}
 
                 elif platform == "Render":
-                    # Poll the service endpoint
-                    resp = await self.http.get(
-                        f"https://api.render.com/v1/services/{deployment_id}",
-                        headers={"Authorization": f"Bearer {settings.RENDER_API_KEY}"},
-                    )
-                    logger.info(f"[RENDER POLL] Status code: {resp.status_code}")
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        logger.info(f"[RENDER POLL] Full response: {data}")
-                        
-                        service_obj = data.get("service", {})
-                        service_id = service_obj.get("id") or data.get("id")
-                        
-                        # Correct field extraction based on Render API structure
-                        status = data.get("deployStatus") or data.get("status") or service_obj.get("suspended")
-                        slug = service_obj.get("slug") or data.get("slug", deployment_id)
-                        
-                        logger.info(f"[RENDER POLL] service_id={service_id}, slug={slug}, status={status}")
-
-                        if status in ("live", "not_suspended", "ready"):
-                            return {
-                                "status": "ready",
-                                "url": f"https://{slug}.onrender.com",
-                                "raw": data,
-                            }
-                    else:
-                        logger.warning(f"[RENDER POLL] Non-200 response: {resp.status_code} — {resp.text[:300]}")
-
-                    # Also poll deploys for the service to check build status
+                    # BUG 2 FIX: Poll the /deploys endpoint to check actual build status
+                    # The service object does NOT have a 'status' field in v1.
                     try:
                         deploys_resp = await self.http.get(
                             f"https://api.render.com/v1/services/{deployment_id}/deploys?limit=1",
@@ -1162,24 +1135,36 @@ class DeploymentOrchestrator:
                         if deploys_resp.status_code == 200:
                             deploys = deploys_resp.json()
                             if deploys and isinstance(deploys, list) and len(deploys) > 0:
-                                deploy_obj = deploys[0].get("deploy", deploys[0])
-                                deploy_status = deploy_obj.get("status", "unknown")
+                                deploy_item = deploys[0].get("deploy", deploys[0])
+                                deploy_status = deploy_item.get("status", "unknown")
                                 logger.info(f"[RENDER POLL] Latest deploy status: {deploy_status}")
+                                
                                 if deploy_status == "live":
-                                    svc_data = data if resp.status_code == 200 else {}
-                                    svc_obj = svc_data.get("service", svc_data) if isinstance(svc_data, dict) else {}
-                                    slug = svc_obj.get("slug", deployment_id)
+                                    # Fetch service to get the slug for the final URL
+                                    svc_resp = await self.http.get(
+                                        f"https://api.render.com/v1/services/{deployment_id}",
+                                        headers={"Authorization": f"Bearer {settings.RENDER_API_KEY}"},
+                                    )
+                                    slug = deployment_id
+                                    raw_data = deploy_item
+                                    if svc_resp.status_code == 200:
+                                        svc_data = svc_resp.json()
+                                        slug = svc_data.get("service", {}).get("slug", slug)
+                                        raw_data = svc_data
+                                        
                                     return {
                                         "status": "ready",
                                         "url": f"https://{slug}.onrender.com",
-                                        "raw": svc_data,
+                                        "raw": raw_data,
                                     }
-                                elif deploy_status in ("deactivated", "build_failed", "update_failed", "canceled"):
+                                elif deploy_status in ("build_failed", "update_failed", "canceled", "deactivated"):
                                     return {
                                         "status": "error",
                                         "message": f"Render deploy failed with status: {deploy_status}",
-                                        "raw": deploys[0],
+                                        "raw": deploy_item,
                                     }
+                        else:
+                            logger.warning(f"[RENDER POLL] deploys non-200: {deploys_resp.text[:300]}")
                     except Exception as poll_err:
                         logger.warning(f"[RENDER POLL] Deploy poll error: {poll_err}")
             except Exception:
@@ -1304,8 +1289,6 @@ class DeploymentOrchestrator:
                     "startCommand": start_cmd
                 }
             }
-            if root_dir:
-                service_details["rootDir"] = root_dir
 
             payload = {
                 "type": "web_service",
@@ -1315,6 +1298,10 @@ class DeploymentOrchestrator:
                 "branch": "main",
                 "serviceDetails": service_details
             }
+            
+            # BUG 1 FIX: rootDir must be at the root of the payload, not inside serviceDetails
+            if root_dir:
+                payload["rootDir"] = root_dir
 
             logger.info(f"[RENDER] Creating service: {sanitized_name} from {repo_url} (env={env})")
             logger.info(f"[RENDER] Payload: {payload}")
