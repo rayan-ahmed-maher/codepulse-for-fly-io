@@ -154,40 +154,59 @@ class GitHubPushService:
         except FileNotFoundError:
             return {"error": "Git is not installed. Please install git and try again."}
         except Exception as e:
-            return {"error": f"Git push error: {str(e)}"}
+            import traceback
+            real_error = traceback.format_exc()
+            print(f"REAL ERROR: {real_error}")
+            return {
+                "status": "error",
+                "reason": str(e),
+                "evidence": real_error,
+                "solution": "Check backend terminal for full traceback"
+            }
 
     async def push_project(self, project_path: str, project_name: str) -> dict:
         """Complete flow: create repo → push via git → return repo URL."""
-        if not self.is_configured:
-            missing = []
-            if not self.token:
-                missing.append("GITHUB_TOKEN")
-            if not self.username:
-                missing.append("GITHUB_USERNAME")
+        try:
+            if not self.is_configured:
+                missing = []
+                if not self.token:
+                    missing.append("GITHUB_TOKEN")
+                if not self.username:
+                    missing.append("GITHUB_USERNAME")
+                return {
+                    "error": f"Missing in .env: {', '.join(missing)}. "
+                             f"Create a GitHub token at https://github.com/settings/tokens with 'repo' scope.",
+                }
+
+            # Step 1: Create repo on GitHub
+            repo_result = await self.create_repo(project_name)
+            if "error" in repo_result:
+                return repo_result
+
+            repo_name = repo_result["name"]
+
+            # Step 2: Push files via git CLI
+            push_result = await self.push_with_git(project_path, repo_name)
+            if "error" in push_result:
+                return push_result
+
+            repo_url = f"https://github.com/{self.username}/{repo_name}"
             return {
-                "error": f"Missing in .env: {', '.join(missing)}. "
-                         f"Create a GitHub token at https://github.com/settings/tokens with 'repo' scope.",
+                "status": "success",
+                "repo_url": repo_url,
+                "clone_url": f"{repo_url}.git",
+                "full_name": f"{self.username}/{repo_name}",
             }
-
-        # Step 1: Create repo on GitHub
-        repo_result = await self.create_repo(project_name)
-        if "error" in repo_result:
-            return repo_result
-
-        repo_name = repo_result["name"]
-
-        # Step 2: Push files via git CLI
-        push_result = await self.push_with_git(project_path, repo_name)
-        if "error" in push_result:
-            return push_result
-
-        repo_url = f"https://github.com/{self.username}/{repo_name}"
-        return {
-            "status": "success",
-            "repo_url": repo_url,
-            "clone_url": f"{repo_url}.git",
-            "full_name": f"{self.username}/{repo_name}",
-        }
+        except Exception as e:
+            import traceback
+            real_error = traceback.format_exc()
+            print(f"REAL ERROR: {real_error}")
+            return {
+                "status": "error",
+                "reason": str(e),
+                "evidence": real_error,
+                "solution": "Check backend terminal for full traceback"
+            }
 
 
 # Module-level singleton

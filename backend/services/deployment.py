@@ -1240,6 +1240,58 @@ class DeploymentOrchestrator:
                     "solution": "Add RENDER_OWNER_ID to your .env file",
                 }
 
+            # FIX 1: Check if service already exists
+            logger.info(f"[RENDER] Checking if service {sanitized_name} exists...")
+            check_resp = await self.http.get(
+                f"https://api.render.com/v1/services?name={sanitized_name}&limit=20",
+                headers={
+                    "Authorization": f"Bearer {settings.RENDER_API_KEY}",
+                    "Accept": "application/json",
+                }
+            )
+            
+            existing_service_id = None
+            existing_slug = sanitized_name
+            if check_resp.status_code == 200:
+                for svc_wrapper in check_resp.json():
+                    svc = svc_wrapper.get("service", {})
+                    if svc.get("name") == sanitized_name:
+                        existing_service_id = svc.get("id")
+                        existing_slug = svc.get("slug", sanitized_name)
+                        break
+
+            if existing_service_id:
+                logger.info(f"[RENDER] Service {sanitized_name} exists ({existing_service_id}). Triggering new deploy...")
+                deploy_resp = await self.http.post(
+                    f"https://api.render.com/v1/services/{existing_service_id}/deploys",
+                    headers={
+                        "Authorization": f"Bearer {settings.RENDER_API_KEY}",
+                        "Accept": "application/json",
+                        "Content-Type": "application/json",
+                    },
+                    json={"clearCache": "do_not_clear"}
+                )
+                
+                if deploy_resp.status_code < 300:
+                    deploy_url = f"https://{existing_slug}.onrender.com"
+                    logger.info(f"[RENDER] Redeploy triggered: {deploy_url}")
+                    return {
+                        "platform": "render",
+                        "url": deploy_url,
+                        "project_name": sanitized_name,
+                        "deployment_id": existing_service_id,
+                        "status": "success",
+                    }
+                else:
+                    logger.warning(f"[RENDER] Redeploy failed ({deploy_resp.status_code}): {deploy_resp.text}. Falling back to creation.")
+
+            # FIX 2: If we reach here, it either didn't exist or redeploy failed. Append random suffix.
+            import random
+            import string
+            suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=4))
+            sanitized_name = f"{sanitized_name}-{suffix}"
+            logger.info(f"[RENDER] Creating new service with unique name: {sanitized_name}")
+
             payload = {
                 "type": "web_service",
                 "name": sanitized_name,

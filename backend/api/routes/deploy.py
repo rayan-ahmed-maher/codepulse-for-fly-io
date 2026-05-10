@@ -52,15 +52,27 @@ async def _deploy_worker(tracking_id: str, req: DeployRequest, db_deploy_id: Opt
     except asyncio.TimeoutError:
         err = f"Deployment timed out after {DEPLOY_TIMEOUT_SEC}s"
         logger.error(f"[DEPLOY] {err}")
-        await deployment_store.update(tracking_id, {"status": "FAILED", "error": err})
+        await deployment_store.update(tracking_id, {"status": "FAILED", "error": err, "reason": "Timeout", "evidence": "Deployment exceeded time limits", "solution": "Check backend logs"})
         if db_deploy_id:
             await db.update_deployment(db_deploy_id, {"status": "error", "error_logs": err})
     except Exception as e:
-        err = f"Deployment worker crashed: {str(e)}"
-        logger.exception(f"[DEPLOY] {err}")
-        await deployment_store.update(tracking_id, {"status": "FAILED", "error": err})
+        import traceback
+        real_error = traceback.format_exc()
+        print(f"REAL ERROR: {real_error}")
+        logger.exception(f"[DEPLOY] Deployment worker crashed: {str(e)}")
+        
+        # Store structured error state for frontend SRE visualization
+        error_payload = {
+            "status": "FAILED",
+            "error": str(e),
+            "reason": type(e).__name__,
+            "evidence": real_error,
+            "solution": "Check backend terminal for full traceback"
+        }
+        await deployment_store.update(tracking_id, error_payload)
+        
         if db_deploy_id:
-            await db.update_deployment(db_deploy_id, {"status": "error", "error_logs": err})
+            await db.update_deployment(db_deploy_id, {"status": "error", "error_logs": real_error})
 
 
 async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_id: Optional[str] = None):
