@@ -107,6 +107,7 @@ from api.routes import analyze, deploy, chat, ingest, stats
 from api.routes import auth, github_import, domain, local_deploy, validate
 from api.routes import domains, payments, terminal_ws
 from api.routes import code_quality, rollback
+from api.routes import brand_generator, domain_health, trending
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(analyze.router, prefix="/api/v1")
@@ -122,5 +123,8 @@ app.include_router(domains.router, prefix="/api/v1")
 app.include_router(payments.router, prefix="/api/v1")
 app.include_router(code_quality.router, prefix="/api/v1")
 app.include_router(rollback.router, prefix="/api/v1")
+app.include_router(brand_generator.router, prefix="/api/v1")
+app.include_router(domain_health.router, prefix="/api/v1")
+app.include_router(trending.router, prefix="/api/v1")
 app.include_router(terminal_ws.router)  # WebSocket — no prefix
 

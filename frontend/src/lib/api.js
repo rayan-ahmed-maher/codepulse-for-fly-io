@@ -193,6 +193,24 @@ export const api = {
 
   deleteVersion: (projectId, version) =>
     call(`/rollback/history/${projectId}/${version}`, { method: "DELETE" }),
+
+  // AI Brand Name Generator
+  generateBrandNames: (keyword) =>
+    call("/brand/generate", { method: "POST", body: JSON.stringify({ keyword }), timeout: 45000 }),
+
+  // Domain Health Score
+  checkDomainHealth: (domain) =>
+    call("/domain/health", { method: "POST", body: JSON.stringify({ domain }), timeout: 30000 }),
+
+  // Trending Dashboard
+  getTrendingKeywords: () => call("/trending/keywords"),
+  getTrendingTlds: ()    => call("/trending/tlds"),
+  getTrendingAvailable: () => call("/trending/available"),
+  logDomainSearch: (keyword, tld, domain, available, priceInr) =>
+    call("/trending/log", {
+      method: "POST",
+      body: JSON.stringify({ keyword, tld, domain, available, price_inr: priceInr }),
+    }),
 };
 
 // Export WebSocket base URL for TerminalWS component

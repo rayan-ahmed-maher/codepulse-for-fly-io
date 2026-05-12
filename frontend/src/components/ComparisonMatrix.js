@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Check, X, Crown, Sparkles, Zap } from "lucide-react";
 
 const FREE_FEATURES = [

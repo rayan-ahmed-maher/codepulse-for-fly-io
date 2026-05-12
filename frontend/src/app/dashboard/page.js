@@ -1,16 +1,18 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Rocket, Check, ExternalLink, Search, Bell, ChevronRight, Cpu, Play, AlertTriangle, X, Globe, Loader2
+  Rocket, Check, ExternalLink, Search, Bell, ChevronRight, Cpu, Play, AlertTriangle, X, Globe, Loader2, Zap,
+  Activity, TrendingUp, TrendingDown, Folder, Archive, GitBranch, FileCode, FileJson, FileText, FileType
 } from "lucide-react";
 import UploadVortex from "@/components/UploadVortex";
 import ComparisonMatrix from "@/components/ComparisonMatrix";
 import ReadinessGauge from "@/components/ReadinessGauge";
 import DeployStepper from "@/components/DeployStepper";
 
-function CountUp({ to, duration = 2 }) {
+function CountUp({ end, to, duration = 2 }) {
+  const target = end ?? to ?? 0;
   const [count, setCount] = useState(0);
   useEffect(() => {
     let startTime;
@@ -19,15 +21,314 @@ function CountUp({ to, duration = 2 }) {
       if (!startTime) startTime = time;
       const progress = Math.min((time - startTime) / (duration * 1000), 1);
       const easeProgress = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
-      setCount(Math.floor(easeProgress * to));
+      setCount(Math.floor(easeProgress * target));
       if (progress < 1) {
         animationFrame = requestAnimationFrame(update);
       }
     };
     animationFrame = requestAnimationFrame(update);
     return () => cancelAnimationFrame(animationFrame);
-  }, [to, duration]);
+  }, [target, duration]);
   return <>{count}</>;
+}
+
+const PARTICLE_POSITIONS = [
+  36.24, 32.11, 21.28, 95.89, 78.65, 90.29, 0.41,
+  41.49, 47.19, 28.41, 22.09, 62.85, 65.92, 6.63,
+  89.99, 87.59, 72.42, 15.96, 13.69, 69.29
+];
+
+const BINARY_BG = "0110100101101110011010010111010001101001011000010110110001101001011110100110010100100000011100110111100101110011011101000110010101101101".repeat(20);
+
+const FloatingFileIcon = ({ icon: Icon, delay, initialX, initialY }) => (
+  <motion.div
+    initial={{ opacity: 0, x: initialX, y: initialY }}
+    animate={{ 
+      y: [initialY, initialY - 100, initialY],
+      x: [initialX, initialX + 20, initialX - 20, initialX],
+      rotate: [0, 360],
+      opacity: [0.1, 0.2, 0.1]
+    }}
+    transition={{ duration: 15 + Math.random() * 10, repeat: Infinity, delay, ease: "easeInOut" }}
+    style={{ position: 'absolute', color: '#00D4FF', pointerEvents: 'none', zIndex: 0 }}
+  >
+    <Icon size={24} />
+  </motion.div>
+);
+
+const FullWidthUploadZone = ({ onUpload, onGitHubImport }) => {
+  const [isDragging, setIsDragging] = useState(false);
+  const folderInputRef = useRef(null);
+  const zipInputRef = useRef(null);
+
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = () => setIsDragging(false);
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onUpload(e.dataTransfer.files);
+    }
+  };
+
+  const frameworkBadges = [
+    { name: 'REACT', color: '#00D4FF' },
+    { name: 'NEXT.JS', color: '#FFFFFF' },
+    { name: 'PYTHON', color: '#FFE162' },
+    { name: 'STATIC HTML', color: '#FF7E33' },
+    { name: 'VUE', color: '#42D392' }
+  ];
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+      onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+      style={{
+        position: 'relative', width: '100%', padding: '80px 40px',
+        background: isDragging ? 'rgba(0, 245, 255, 0.05)' : 'rgba(255,255,255,0.03)',
+        border: `1px solid ${isDragging ? '#00D4FF' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius: '24px', backdropFilter: 'blur(10px)', overflow: 'hidden',
+        transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        transform: isDragging ? 'scale(1.01)' : 'scale(1)',
+        boxShadow: isDragging ? '0 0 60px rgba(0, 212, 255, 0.25)' : '0 10px 40px rgba(0,0,0,0.4)',
+        cursor: 'pointer'
+      }}
+      onClick={() => folderInputRef.current?.click()}
+    >
+      <style>{`
+        @keyframes border-rotate {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+      
+      {/* Animated Border */}
+      <div style={{
+        position: 'absolute', inset: '4px', border: '2px dashed transparent',
+        borderRadius: '20px', pointerEvents: 'none', zIndex: 1,
+        backgroundImage: `linear-gradient(${isDragging ? '#00D4FF' : 'rgba(0,212,255,0.3)'}, ${isDragging ? '#00D4FF' : 'rgba(0,212,255,0.3)'}), linear-gradient(rgba(0,0,0,0), rgba(0,0,0,0))`,
+        backgroundOrigin: 'border-box', backgroundClip: 'content-box, border-box',
+        maskImage: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        maskComposite: 'exclude',
+        WebkitMaskComposite: 'destination-out',
+        border: '2px dashed rgba(0, 212, 255, 0.4)',
+        animation: 'border-rotate 20s linear infinite'
+      }} />
+
+      {/* Floating Files */}
+      <FloatingFileIcon icon={FileCode} delay={0} initialX="10%" initialY="80%" />
+      <FloatingFileIcon icon={FileJson} delay={2} initialX="85%" initialY="20%" />
+      <FloatingFileIcon icon={FileText} delay={4} initialX="15%" initialY="30%" />
+      <FloatingFileIcon icon={FileType} delay={6} initialX="90%" initialY="70%" />
+
+      <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+         <motion.div 
+           animate={{ 
+             scale: isDragging ? 1.2 : [1, 1.15, 1],
+             y: isDragging ? -20 : 0
+           }} 
+           transition={{ 
+             scale: { duration: 3, repeat: Infinity, ease: 'easeInOut' },
+             y: { type: 'spring', stiffness: 300, damping: 20 }
+           }}
+           style={{
+             width: '120px', height: '120px', borderRadius: '50%', background: 'rgba(0, 212, 255, 0.1)',
+             display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '32px',
+             boxShadow: `0 0 20px rgba(0, 212, 255, 0.4), inset 0 0 30px rgba(0, 212, 255, 0.2)`,
+             border: '1px solid rgba(0, 212, 255, 0.5)'
+           }}
+         >
+            <Rocket size={64} color={isDragging ? "#42D392" : "#00D4FF"} style={{ filter: 'drop-shadow(0 0 12px rgba(0, 212, 255, 0.8))' }} />
+         </motion.div>
+
+         <h2 style={{ 
+           fontFamily: 'monospace', fontSize: '2.8rem', fontWeight: 900, 
+           background: 'linear-gradient(90deg, #00F5FF, #9B4DFF)',
+           WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
+           letterSpacing: '4px', marginBottom: '16px', textTransform: 'uppercase'
+         }}>
+            {isDragging ? "Release to Upload" : "DROP YOUR PROJECT HERE"}
+         </h2>
+         <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '1.2rem', marginBottom: '48px', maxWidth: '600px' }}>
+            Drag your project folder directly into the vortex, upload a .zip archive, or connect your GitHub repository to begin deployment.
+         </p>
+
+         <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '48px' }}>
+            <input type="file" ref={folderInputRef} webkitdirectory="true" directory="true" style={{ display: 'none' }} onChange={(e) => onUpload(e.target.files)} />
+            <input type="file" ref={zipInputRef} accept=".zip" style={{ display: 'none' }} onChange={(e) => onUpload(e.target.files)} />
+            
+            <motion.button whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(0, 212, 255, 0.4)' }}
+              className="btn" onClick={(e) => { e.stopPropagation(); folderInputRef.current?.click(); }} 
+              style={{ background: 'linear-gradient(135deg, #00D4FF 0%, #0077FF 100%)', color: '#fff', border: 'none', padding: '14px 32px', fontWeight: 700, borderRadius: '99px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+               <Folder size={18} /> Select Folder
+            </motion.button>
+            
+            <motion.button whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(168, 85, 247, 0.4)' }}
+              className="btn" onClick={(e) => { e.stopPropagation(); zipInputRef.current?.click(); }} 
+              style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)', color: '#fff', border: 'none', padding: '14px 32px', fontWeight: 700, borderRadius: '99px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+               <Archive size={18} /> Upload .zip
+            </motion.button>
+            
+            <motion.button whileHover={{ scale: 1.05, background: 'rgba(255,255,255,0.1)' }}
+              className="btn" onClick={(e) => { e.stopPropagation(); onGitHubImport(); }} 
+              style={{ background: 'rgba(0,0,0,0.3)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', padding: '14px 32px', fontWeight: 700, borderRadius: '99px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+               <GitBranch size={18} /> GitHub Import
+            </motion.button>
+         </div>
+
+         <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {frameworkBadges.map(fw => (
+               <motion.div key={fw.name}
+                 whileHover={{ y: -4, background: `${fw.color}15` }}
+                 style={{
+                   padding: '8px 20px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 800,
+                   background: 'rgba(255,255,255,0.03)', border: `1px solid ${fw.color}33`,
+                   color: fw.color, letterSpacing: '1px', backdropFilter: 'blur(5px)',
+                   transition: 'all 0.3s ease'
+                 }}>
+                  {fw.name}
+               </motion.div>
+            ))}
+         </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const HackerTerminal = () => {
+  const messages = [
+    "Welcome to DeployAI — The Future of Deployment",
+    "Initializing neural deployment engine...",
+    "Scanning for projects in the multiverse...",
+    "All systems operational. Ready to deploy.",
+    "Drop your project to begin the sequence.",
+    "Remember: Great code deserves a great home.",
+    "DeployAI — Where ideas go live.",
+    "Analyzing 1,247 deployment patterns...",
+    "Connecting to 4 cloud platforms...",
+    "Security protocols active. Your code is safe.",
+    "Pro tip: ZIP files deploy 3x faster.",
+    "Ready. Waiting for your next project..."
+  ];
+
+  const colors = ['#00F5FF', '#00FF41', '#F59E0B', '#FFFFFF'];
+  
+  const [msgIndex, setMsgIndex] = useState(0);
+  const [charIndex, setCharIndex] = useState(0);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [currentColor, setCurrentColor] = useState(colors[1]);
+  const [uptime, setUptime] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setUptime(prev => prev + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatUptime = (seconds) => {
+    const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+    const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${h}:${m}:${s}`;
+  };
+
+  useEffect(() => {
+    let timer;
+    const currentMsg = messages[msgIndex];
+
+    if (isDeleting) {
+       timer = setTimeout(() => {
+          setMsgIndex((prev) => (prev + 1) % messages.length);
+          setCharIndex(0);
+          setCurrentColor(colors[Math.floor(Math.random() * colors.length)]);
+          setIsDeleting(false);
+       }, 500); 
+    } else {
+       if (charIndex < currentMsg.length) {
+          timer = setTimeout(() => setCharIndex(c => c + 1), 50);
+       } else {
+          timer = setTimeout(() => setIsDeleting(true), 1500);
+       }
+    }
+    return () => clearTimeout(timer);
+  }, [charIndex, isDeleting, msgIndex]);
+
+  const displayedText = messages[msgIndex].substring(0, charIndex);
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+      style={{
+        width: '100%', background: '#000000', borderRadius: '12px', overflow: 'hidden',
+        border: '1px solid #00FF41', position: 'relative', minHeight: '320px',
+        boxShadow: '0 0 20px rgba(0, 255, 65, 0.2), inset 0 0 20px rgba(0,0,0,0.8)',
+        animation: 'terminal-flicker 8s infinite'
+      }}
+    >
+       <style>{`
+         @keyframes terminal-flicker {
+           0%, 100% { opacity: 1; }
+           50% { opacity: 0.98; }
+         }
+         @keyframes pulse-dot {
+           0%, 100% { opacity: 1; transform: scale(1); }
+           50% { opacity: 0.5; transform: scale(0.8); }
+         }
+         @keyframes matrix-fall {
+           0% { transform: translateY(-100%); }
+           100% { transform: translateY(100%); }
+         }
+       `}</style>
+
+       {/* Top Bar */}
+       <div style={{ background: '#111', padding: '10px 16px', display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(0, 255, 65, 0.2)', position: 'relative', zIndex: 12 }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+             <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FF5F56' }} />
+             <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#FFBD2E' }} />
+             <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#27C93F' }} />
+          </div>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', fontFamily: 'monospace', fontSize: '0.85rem', color: '#00FF41', fontWeight: 'bold' }}>
+             <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#00FF41', animation: 'pulse-dot 1.5s infinite' }} />
+             LIVE: DEPLOYAI_TERMINAL v2.0
+          </div>
+          <div style={{ fontFamily: 'monospace', fontSize: '0.8rem', color: 'rgba(0,255,65,0.6)' }}>
+            UPTIME: {formatUptime(uptime)}
+          </div>
+       </div>
+
+       {/* Scanline */}
+       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(to bottom, transparent, transparent 50%, rgba(0, 255, 65, 0.05) 50%, rgba(0, 255, 65, 0.05))', backgroundSize: '100% 4px', zIndex: 10, opacity: 0.3 }} />
+
+       {/* Matrix Rain Background */}
+       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', opacity: 0.08, zIndex: 1 }}>
+          {[...Array(10)].map((_, i) => (
+            <div key={i} style={{
+              position: 'absolute', top: 0, left: `${i * 10}%`, height: '100%',
+              fontFamily: 'monospace', fontSize: '14px', color: '#00FF41',
+              writingMode: 'vertical-rl', textOrientation: 'upright',
+              animation: `matrix-fall ${5 + Math.random() * 5}s linear infinite`,
+              animationDelay: `${Math.random() * 5}s`
+            }}>
+              {Array.from({length: 20}, () => String.fromCharCode(0x30A0 + Math.random() * 96)).join('')}
+            </div>
+          ))}
+       </div>
+
+       {/* CRT Curvature overlay */}
+       <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', boxShadow: 'inset 0 0 80px rgba(0,0,0,1)', zIndex: 11 }} />
+
+       {/* Terminal Content */}
+       <div style={{ padding: '30px', minHeight: '180px', fontFamily: 'monospace', fontSize: '1.15rem', position: 'relative', zIndex: 2 }}>
+          <div style={{ color: '#00D4FF', marginBottom: '12px', fontSize: '0.9rem', fontWeight: 'bold' }}>root@deployai:~# ./initialize_sequence.sh</div>
+          <motion.div 
+             key={msgIndex} initial={{ opacity: 0.5 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}
+             style={{ display: 'inline-block', color: currentColor, textShadow: `0 0 10px ${currentColor}` }}
+          >
+             {displayedText}
+             <motion.span animate={{ opacity: [1, 0] }} transition={{ repeat: Infinity, duration: 0.8 }} style={{ display: 'inline-block', width: '10px', height: '1.2rem', background: '#00FF41', verticalAlign: 'middle', marginLeft: '6px', boxShadow: '0 0 10px #00FF41' }} />
+          </motion.div>
+       </div>
+    </motion.div>
+  );
 }
 import Terminal from "@/components/Terminal";
 import TemplateCards from "@/components/TemplateCards";
@@ -150,7 +451,11 @@ export default function DeployPage() {
   const theme = FRAMEWORK_THEMES[framework] || FRAMEWORK_THEMES.unknown;
 
   useEffect(() => {
-    api.getStats().then(setStats).catch(() => {});
+    api.getStats().then(s => setStats({
+      total_deploys: s?.total_deploys ?? 0,
+      active_sites: s?.active_sites ?? 0,
+      failed_deploys: s?.failed_deploys ?? 0,
+    })).catch(() => {});
   }, [phase]);
 
   const pushLog = (msg) => setLogs((prev) => [...prev, msg]);
@@ -580,23 +885,101 @@ export default function DeployPage() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="stats-bar" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px" }}>
+      {/* Stats Bar */}
+      <div className="stats-bar" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "24px", marginBottom: "40px" }}>
         {[
-          { value: stats.total_deploys, label: "Total Deploys" },
-          { value: stats.active_sites, label: "Active Sites" },
-          { value: stats.failed_deploys, label: "Failed" },
-          { value: "99.9", label: "Latency", suffix: "ms" },
+          { 
+            value: stats.total_deploys, label: "Total Deploys", 
+            icon: Rocket, color: "#00D4FF", 
+            gradient: "linear-gradient(135deg, #0A1628 0%, #0D2A4A 100%)",
+            trend: "up"
+          },
+          { 
+            value: stats.active_sites, label: "Active Sites", 
+            icon: Globe, color: "#10b981", 
+            gradient: "linear-gradient(135deg, #0A2010 0%, #0D3A1A 100%)",
+            trend: "up"
+          },
+          { 
+            value: stats.failed_deploys, label: "Failed", 
+            icon: AlertTriangle, color: "#ef4444", 
+            gradient: "linear-gradient(135deg, #2A0A0A 0%, #4A0D0D 100%)",
+            trend: "down"
+          },
+          { 
+            value: 99.9, label: "Latency", 
+            icon: Activity, color: "#a855f7", 
+            gradient: "linear-gradient(135deg, #1A0A2A 0%, #2A0D4A 100%)",
+            suffix: "ms",
+            trend: "up"
+          },
         ].map((stat, i) => (
-          <motion.div key={stat.label} className="stat-card"
-            initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 + i * 0.15, type: "spring", stiffness: 90 }}
-            whileHover={{ y: -5, transition: { duration: 0.2 } }}>
-            <div className="mono-label">{stat.label}</div>
-            <div className="hero-number" style={{ marginTop: "12px" }}>
-              {typeof stat.value === "number" ? <CountUp end={stat.value} duration={2.5} separator="," /> : stat.value}
-              {stat.suffix && <span style={{ fontSize: "1.2rem", marginLeft: 4, color: "var(--text-secondary)" }}>{stat.suffix}</span>}
+          <motion.div key={stat.label}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1, duration: 0.5 }}
+            whileHover={{ y: -6 }}
+            style={{
+              position: "relative", padding: "24px", borderRadius: "20px",
+              background: stat.gradient, overflow: "hidden",
+              border: "1px solid rgba(255,255,255,0.05)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              display: "flex", flexDirection: "column", gap: "12px",
+              transition: "all 0.3s ease"
+            }}
+          >
+            {/* Animated Border */}
+            <motion.div
+              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              transition={{ duration: 3, repeat: Infinity }}
+              style={{
+                position: "absolute", inset: 0, borderRadius: "20px",
+                padding: "1px", background: `linear-gradient(45deg, transparent, ${stat.color}, transparent)`,
+                WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                WebkitMaskComposite: 'xor',
+                maskComposite: 'exclude',
+                pointerEvents: 'none'
+              }}
+            />
+
+            {/* Sparkline Simulation */}
+            <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: "40px", opacity: 0.3, pointerEvents: "none" }}>
+              <svg width="100%" height="100%" viewBox="0 0 100 40" preserveAspectRatio="none">
+                <path d="M0,35 Q10,15 20,30 T40,10 T60,25 T80,5 T100,20" fill="none" stroke={stat.color} strokeWidth="2" />
+              </svg>
             </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", zIndex: 1 }}>
+              <div style={{ 
+                width: "48px", height: "48px", borderRadius: "12px", 
+                background: "rgba(0,0,0,0.2)", display: "flex", alignItems: "center", 
+                justifyContent: "center", border: `1px solid ${stat.color}33`
+              }}>
+                <stat.icon size={24} color={stat.color} style={{ filter: `drop-shadow(0 0 8px ${stat.color})` }} />
+              </div>
+              <div style={{ color: stat.trend === 'up' ? '#10b981' : '#ef4444', display: 'flex', alignItems: 'center' }}>
+                {stat.trend === 'up' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              </div>
+            </div>
+
+            <div style={{ zIndex: 1 }}>
+              <div className="mono-label" style={{ fontSize: "0.65rem", letterSpacing: "1.5px", color: "rgba(255,255,255,0.4)" }}>{stat.label.toUpperCase()}</div>
+              <div className="hero-number" style={{ fontSize: "2rem", fontWeight: 800, marginTop: "4px" }}>
+                <CountUp end={stat.value} duration={2} />
+                {stat.suffix && <span style={{ fontSize: "1rem", color: "rgba(255,255,255,0.4)", marginLeft: "4px" }}>{stat.suffix}</span>}
+              </div>
+            </div>
+
+            {/* Moving Gradient Background */}
+            <motion.div
+              animate={{ x: [-100, 100], y: [-50, 50] }}
+              transition={{ duration: 10, repeat: Infinity, repeatType: "reverse" }}
+              style={{
+                position: "absolute", top: "-50%", left: "-50%", width: "200%", height: "200%",
+                background: `radial-gradient(circle, ${stat.color}05 0%, transparent 70%)`,
+                pointerEvents: "none", zIndex: 0
+              }}
+            />
           </motion.div>
         ))}
       </div>
@@ -622,73 +1005,77 @@ export default function DeployPage() {
       <AnimatePresence mode="wait">
         {(phase === "idle" || phase === "rejected") && (
           <motion.div key="upload" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginTop: "40px" }}>
-              {/* Wave Chart Section */}
-              <motion.div className="stat-card" 
-                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.6, duration: 0.8 }}
-                style={{ padding: "28px", display: "flex", flexDirection: "column" }}>
-                <div className="mono-label" style={{ marginBottom: "20px" }}>Network Throughput</div>
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", overflow: "hidden" }}>
-                  <svg width="100%" height="100%" viewBox="0 0 400 100" preserveAspectRatio="none">
-                    <motion.path
-                      d="M0,50 Q50,10 100,50 T200,50 T300,50 T400,50"
-                      fill="none"
-                      stroke="var(--color-orange)"
-                      strokeWidth="2.5"
-                      initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2, ease: "easeOut", delay: 1 }}
-                      style={{ filter: "drop-shadow(0 0 8px rgba(255, 107, 53, 0.6))" }}
-                    />
-                    <motion.path
-                      d="M0,60 Q50,90 100,60 T200,60 T300,60 T400,60"
-                      fill="none"
-                      stroke="var(--color-pink)"
-                      strokeWidth="2.5"
-                      initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2.2, ease: "easeOut", delay: 1.2 }}
-                      style={{ filter: "drop-shadow(0 0 8px rgba(255, 45, 155, 0.6))", opacity: 0.8 }}
-                    />
-                    <motion.path
-                      d="M0,40 Q50,60 100,40 T200,40 T300,40 T400,40"
-                      fill="none"
-                      stroke="var(--color-cyan)"
-                      strokeWidth="2.5"
-                      initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 2.4, ease: "easeOut", delay: 1.4 }}
-                      style={{ filter: "drop-shadow(0 0 8px rgba(0, 245, 255, 0.6))", opacity: 0.9 }}
-                    />
-                  </svg>
-                </div>
-              </motion.div>
-
-              {/* Gauge Dial Section */}
-              <motion.div className="stat-card" 
-                initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.7, duration: 0.8 }}
-                style={{ padding: "28px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <div className="mono-label" style={{ marginBottom: "20px", alignSelf: "flex-start" }}>Cluster Health</div>
-                <div style={{ position: "relative", width: "180px", height: "180px", marginTop: "auto", marginBottom: "auto" }}>
-                  <svg width="100%" height="100%" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
-                    <motion.circle 
-                      cx="50" cy="50" r="40" fill="none" stroke="var(--color-magenta)" strokeWidth="8"
-                      strokeDasharray="251.2"
-                      initial={{ strokeDashoffset: 251.2 }}
-                      animate={{ strokeDashoffset: 25.12 }} // 90% fill
-                      transition={{ duration: 2.5, ease: "easeOut", delay: 1.5 }}
-                      style={{ filter: "drop-shadow(0 0 10px rgba(255,0,255,0.6))", transform: "rotate(-90deg)", transformOrigin: "50% 50%" }}
-                    />
-                  </svg>
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <div className="hero-number" style={{ fontSize: "2rem" }}><CountUp end={90} duration={2.5} delay={1.5} />%</div>
-                  </div>
-                </div>
-              </motion.div>
+            style={{ display: "flex", flexDirection: "column", gap: 16, position: 'relative' }}>
+            
+            <div style={{ marginTop: "40px", display: "flex", flexDirection: "column", gap: "24px" }}>
+              <FullWidthUploadZone onUpload={handleUpload} onGitHubImport={handleGitHubImport} />
             </div>
 
-            <UploadVortex onUpload={handleUpload} onGitHubImport={handleGitHubImport} isAnalyzing={false} />
-            <div style={{ marginTop: 8 }}>
-              <div className="section-label">One-Click Templates — Start Instantly</div>
-              <TemplateCards onSelect={(t) => { /* Templates would need real files */ }} />
+            {/* Glowing Divider */}
+            <div style={{ height: '1px', width: '100%', background: 'linear-gradient(90deg, transparent, #00D4FF, transparent)', opacity: 0.5, margin: '20px 0' }} />
+
+            <style>{`
+              @keyframes mesh-shift {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+              }
+            `}</style>
+            
+            {/* Bottom Section with Mesh and Particles */}
+            <div style={{ 
+              position: 'relative', padding: '32px', borderRadius: '24px', overflow: 'hidden',
+              background: 'linear-gradient(135deg, #050510, #1A0A3A, #050510)',
+              backgroundSize: '400% 400%',
+              animation: 'mesh-shift 15s ease infinite',
+              border: '1px solid rgba(255,255,255,0.05)',
+              marginTop: '20px'
+            }}>
+              {/* Particle Background */}
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+                {[...Array(20)].map((_, i) => (
+                  <motion.div key={i}
+                    animate={{ y: [0, -400], opacity: [0, 0.2, 0] }}
+                    transition={{ duration: 10 + Math.random() * 10, repeat: Infinity, delay: Math.random() * 10 }}
+                    style={{
+                      position: 'absolute', bottom: -10, left: `${Math.random() * 100}%`,
+                      width: '2px', height: '2px', background: '#00D4FF', borderRadius: '50%'
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Templates Section */}
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <motion.div animate={{ scale: [1, 1.2, 1], rotate: [0, 10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
+                        <Zap size={18} color="#00D4FF" fill="#00D4FF" />
+                      </motion.div>
+                      <span style={{ fontSize: "13px", fontWeight: 800, color: "#fff", letterSpacing: "2px", textTransform: 'uppercase' }}>
+                        One-Click Templates — Start Instantly
+                      </span>
+                    </div>
+                    <motion.div 
+                      initial={{ width: 0 }} animate={{ width: '100%' }} transition={{ duration: 1.5, ease: 'easeOut' }}
+                      style={{ height: '2px', background: 'linear-gradient(90deg, #00D4FF, transparent)', marginTop: '6px' }}
+                    />
+                  </div>
+                  <div style={{
+                    padding: '4px 12px', borderRadius: '999px', fontSize: '0.65rem', fontWeight: 700,
+                    background: 'rgba(0, 212, 255, 0.1)', border: '1px solid rgba(0, 212, 255, 0.3)', color: '#00D4FF'
+                  }}>
+                    4 TEMPLATES
+                  </div>
+                </div>
+                <TemplateCards onSelect={(t) => { /* Templates would need real files */ }} />
+              </div>
+
+              {/* Terminal Section moved below templates */}
+              <div style={{ marginTop: '40px', position: 'relative', zIndex: 1 }}>
+                <HackerTerminal />
+              </div>
             </div>
           </motion.div>
         )}

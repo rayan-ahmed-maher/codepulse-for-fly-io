@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useSpring, useTransform } from "framer-motion";
+import { motion, AnimatePresence, useSpring, useTransform } from "framer-motion";
 import { useEffect, useState } from "react";
 
 export default function ReadinessGauge({ score = 0, size = 140, strokeWidth = 10 }) {

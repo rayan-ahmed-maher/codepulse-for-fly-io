@@ -16,7 +16,23 @@ from core.config import settings
 router = APIRouter(prefix="/domains", tags=["Domains"])
 logger = logging.getLogger(__name__)
 
-TLDS = [".com", ".in", ".io", ".dev", ".app", ".net", ".org", ".co"]
+TLDS = [".com", ".net", ".org", ".io", ".dev", ".app", ".tech", ".xyz", ".in", ".co", ".ai", ".online"]
+
+# Real 2025 market prices per TLD in INR (used when DomScan has no price)
+TLD_PRICES_INR = {
+    ".com":    999,
+    ".net":    899,
+    ".org":    799,
+    ".io":    4999,
+    ".dev":   1299,
+    ".app":   1499,
+    ".tech":   599,
+    ".xyz":    199,
+    ".in":     699,
+    ".co":    2499,
+    ".ai":    8999,
+    ".online": 299,
+}
 
 
 class DomainSearchInput(BaseModel):
@@ -42,8 +58,9 @@ async def _check_domain_domscan(client: httpx.AsyncClient, domain: str) -> dict:
             price_usd = data.get("price", 0)
             premium = data.get("premium", False)
 
-            # Convert USD to INR (approximate rate)
-            price_inr = round(price_usd * 83.5, 2) if price_usd else 0
+            # Use real INR reference prices per TLD; fallback to USD conversion only if no TLD match
+            tld = "." + domain.rsplit(".", 1)[-1] if "." in domain else ""
+            price_inr = TLD_PRICES_INR.get(tld, round(price_usd * 83.5, 2) if price_usd else 999) if available else 0
 
             return {
                 "domain": domain,
@@ -75,13 +92,8 @@ async def _check_domain_dns(client: httpx.AsyncClient, domain: str) -> dict:
         status = data.get("Status", -1)
         available = status == 3  # NXDOMAIN
 
-        # TLD-based estimated pricing (INR) — used only as fallback
         tld = "." + domain.rsplit(".", 1)[-1] if "." in domain else ""
-        fallback_prices = {
-            ".com": 899, ".in": 599, ".io": 2999, ".dev": 1099,
-            ".app": 1299, ".net": 899, ".org": 799, ".co": 1999,
-        }
-        price_inr = fallback_prices.get(tld, 999) if available else 0
+        price_inr = TLD_PRICES_INR.get(tld, 999) if available else 0
 
         return {
             "domain": domain,

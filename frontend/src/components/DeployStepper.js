@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Scan, Shield, Server, Rocket, Check, Loader2 } from "lucide-react";
 
 const STEPS = [
