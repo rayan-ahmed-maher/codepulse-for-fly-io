@@ -60,9 +60,14 @@ setup_exception_handlers(app)
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize all observability services at app startup."""
+    """Initialize all observability services and run persistence self-test."""
     from core.observability import init_observability
     init_observability()
+
+    # ── Supabase persistence self-test ──────────────────────────────────────
+    from core.state import deployment_store
+    await deployment_store.self_test()
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -107,7 +112,7 @@ from api.routes import analyze, deploy, chat, ingest, stats
 from api.routes import auth, github_import, domain, local_deploy, validate
 from api.routes import domains, payments, terminal_ws
 from api.routes import code_quality, rollback
-from api.routes import brand_generator, domain_health, trending
+from api.routes import brand_generator, domain_health, trending, code_analysis
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(analyze.router, prefix="/api/v1")
@@ -126,5 +131,6 @@ app.include_router(rollback.router, prefix="/api/v1")
 app.include_router(brand_generator.router, prefix="/api/v1")
 app.include_router(domain_health.router, prefix="/api/v1")
 app.include_router(trending.router, prefix="/api/v1")
+app.include_router(code_analysis.router, prefix="/api/v1")
 app.include_router(terminal_ws.router)  # WebSocket — no prefix
 

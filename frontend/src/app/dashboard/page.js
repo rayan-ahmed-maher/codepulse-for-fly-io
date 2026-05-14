@@ -300,17 +300,20 @@ const HackerTerminal = () => {
 
        {/* Matrix Rain Background */}
        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', opacity: 0.08, zIndex: 1 }}>
-          {[...Array(10)].map((_, i) => (
-            <div key={i} style={{
-              position: 'absolute', top: 0, left: `${i * 10}%`, height: '100%',
-              fontFamily: 'monospace', fontSize: '14px', color: '#00FF41',
-              writingMode: 'vertical-rl', textOrientation: 'upright',
-              animation: `matrix-fall ${5 + Math.random() * 5}s linear infinite`,
-              animationDelay: `${Math.random() * 5}s`
-            }}>
-              {Array.from({length: 20}, () => String.fromCharCode(0x30A0 + Math.random() * 96)).join('')}
-            </div>
-          ))}
+          {[...Array(10)].map((_, i) => {
+            const matrixChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%^&*()_+-=[]{}|;:,.<>?/~`';
+            return (
+              <div key={i} style={{
+                position: 'absolute', top: 0, left: `${i * 10}%`, height: '100%',
+                fontFamily: 'monospace', fontSize: '14px', color: '#00FF41',
+                writingMode: 'vertical-rl', textOrientation: 'upright',
+                animation: `matrix-fall ${5 + Math.random() * 5}s linear infinite`,
+                animationDelay: `${Math.random() * 5}s`
+              }}>
+                {Array.from({length: 20}, () => matrixChars.charAt(Math.floor(Math.random() * matrixChars.length))).join('')}
+              </div>
+            );
+          })}
        </div>
 
        {/* CRT Curvature overlay */}
@@ -878,11 +881,6 @@ export default function DeployPage() {
 
         {/* WebGL 3D Globe Component */}
         <ThreeGlobeCenterpiece />
-
-        <div style={{ position: "absolute", bottom: "10px", textAlign: "center", zIndex: 2 }}>
-          <div className="mono-label" style={{ color: "var(--color-cyan)" }}>ORCHESTRATOR_ACTIVE</div>
-          <div className="mono-label" style={{ fontSize: "0.55rem", marginTop: "4px" }}>READY_FOR_DEPLOYMENT</div>
-        </div>
       </div>
 
       {/* Stats Bar */}

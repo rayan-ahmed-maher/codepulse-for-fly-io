@@ -206,12 +206,52 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
         proj_path = Path(req.project_path)
         if is_python:
             req_file = proj_path / "requirements.txt"
-            if not req_file.exists():
-                logger.info("⚠ requirements.txt missing — auto-generated before deployment")
+            if req_file.exists():
+                # ── NEVER replace an existing requirements.txt ──
+                logger.info("[DEPLOY] requirements.txt already exists — using project's own file AS IS")
                 if db_deploy_id:
-                    await db.add_build_log(db_deploy_id, "INFO", "⚠ requirements.txt missing — auto-generated before deployment")
+                    await db.add_build_log(db_deploy_id, "INFO", "✓ Using project's existing requirements.txt")
+            else:
+                logger.info("⚠ requirements.txt missing — auto-generating before deployment")
+                if db_deploy_id:
+                    await db.add_build_log(db_deploy_id, "INFO", "⚠ requirements.txt missing — auto-generating before deployment")
                 
-                # Custom Python scanner
+                # ── Core packages ALWAYS included for every Python project ──
+                ALWAYS_INCLUDE = {
+                    "openai",
+                    "fastapi",
+                    "uvicorn[standard]",
+                    "python-multipart",
+                    "python-dotenv",
+                    "httpx",
+                    "pydantic",
+                    "requests",
+                    "aiofiles",
+                }
+
+                # Standard library modules to exclude from detected imports
+                STDLIB = {
+                    "os", "sys", "re", "math", "time", "datetime", "json",
+                    "pathlib", "logging", "asyncio", "typing", "collections",
+                    "itertools", "functools", "random", "subprocess", "shutil",
+                    "io", "abc", "string", "hashlib", "hmac", "base64",
+                    "uuid", "enum", "dataclasses", "copy", "operator",
+                    "contextlib", "inspect", "traceback", "warnings",
+                    "tempfile", "glob", "fnmatch", "stat", "struct",
+                    "socket", "ssl", "http", "urllib", "email",
+                    "html", "xml", "csv", "configparser", "argparse",
+                    "textwrap", "difflib", "pprint", "threading", "queue",
+                    "multiprocessing", "concurrent", "signal", "mmap",
+                    "codecs", "unicodedata", "locale", "gettext",
+                    "decimal", "fractions", "statistics", "secrets",
+                    "pickle", "shelve", "sqlite3", "zipfile", "tarfile",
+                    "gzip", "bz2", "lzma", "zlib", "webbrowser",
+                    "unittest", "doctest", "pdb", "profile", "timeit",
+                    "dis", "ast", "token", "tokenize", "types",
+                    "importlib", "pkgutil", "site", "sysconfig",
+                }
+
+                # Custom Python scanner — detect imports from .py files
                 import re
                 detected_packages = set()
                 import_pattern = re.compile(r'^\s*(?:import|from)\s+([a-zA-Z0-9_]+)')
@@ -225,20 +265,26 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
                             match = import_pattern.match(line)
                             if match:
                                 pkg = match.group(1)
-                                if pkg not in ("os", "sys", "re", "math", "time", "datetime", "json", "pathlib", "logging", "asyncio", "typing", "collections", "itertools", "functools", "random", "subprocess", "shutil"):
+                                if pkg not in STDLIB:
                                     detected_packages.add(pkg.replace("_", "-"))
                     except Exception:
                         pass
                 
-                # Framework minimums
+                # Framework-specific extras
                 if fw == "fastapi":
                     detected_packages.update(["fastapi", "uvicorn[standard]", "python-multipart"])
                 elif fw == "flask":
                     detected_packages.update(["flask", "gunicorn"])
                 elif fw == "django":
                     detected_packages.update(["django", "gunicorn"])
-                    
-                req_file.write_text("\n".join(sorted(detected_packages)))
+                
+                # Merge: always-include + detected
+                all_packages = ALWAYS_INCLUDE | detected_packages
+                final_reqs = "\n".join(sorted(all_packages))
+                req_file.write_text(final_reqs)
+                logger.info(f"[DEPLOY] Auto-generated requirements.txt with {len(all_packages)} packages")
+                if db_deploy_id:
+                    await db.add_build_log(db_deploy_id, "INFO", f"✓ Auto-generated requirements.txt with {len(all_packages)} packages")
 
             if not req_file.exists():
                 err = "Missing requirements.txt — Render cannot install Python dependencies without it, and auto-generation failed."
@@ -533,10 +579,36 @@ async def get_deployment_status(tracking_id: str):
 
 @router.get("/list")
 async def list_deployments(user_id: Optional[str] = Query(None)):
-    # Try Supabase first
-    if user_id:
-        db_records = await db.get_deployments(user_id)
-        if db_records:
-            return db_records
-    # Fallback to in-memory
+    """
+    Return last 50 deployments sorted by created_at descending.
+    Reads from Supabase with a 15-second timeout; falls back to memory.
+    """
+    import asyncio
+
+    def _sync_list():
+        from core.supabase_client import get_supabase
+        sb = get_supabase()
+        if not sb:
+            return None
+        q = sb.table("deployments").select("*").order("created_at", desc=True).limit(50)
+        if user_id:
+            q = q.eq("user_id", user_id)
+        result = q.execute()
+        return result.data or []
+
+    loop = asyncio.get_event_loop()
+    try:
+        rows = await asyncio.wait_for(
+            loop.run_in_executor(None, _sync_list),
+            timeout=15.0,
+        )
+        if rows is not None:
+            return rows
+    except asyncio.TimeoutError:
+        logger.warning("[DEPLOY] list query timed out — falling back to memory")
+    except Exception as e:
+        logger.error(f"[DEPLOY] list query failed: {e}")
+
+    # Fallback: in-memory store (always instant)
     return await deployment_store.list_all()
+

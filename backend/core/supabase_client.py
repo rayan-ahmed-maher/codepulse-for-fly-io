@@ -206,5 +206,43 @@ class SupabaseDB:
             logger.error(f"delete_deployment_version: {e}")
             return False
 
+    # ── Code Analysis History ──────────────────────────────────
+    
+    @staticmethod
+    async def save_analysis_history(data: dict) -> bool:
+        sb = get_supabase()
+        if not sb:
+            return False
+        try:
+            sb.table("analysis_history").insert(data).execute()
+            return True
+        except Exception as e:
+            logger.error(f"save_analysis_history: {e}")
+            return False
+            
+    @staticmethod
+    async def get_analysis_history(limit: int = 10) -> list:
+        sb = get_supabase()
+        if not sb:
+            return []
+        try:
+            result = sb.table("analysis_history").select("*").order("timestamp", desc=True).limit(limit).execute()
+            return result.data or []
+        except Exception as e:
+            logger.error(f"get_analysis_history: {e}")
+            return []
+            
+    @staticmethod
+    async def get_analysis_by_id(project_id: str) -> Optional[dict]:
+        sb = get_supabase()
+        if not sb:
+            return None
+        try:
+            result = sb.table("analysis_history").select("*").eq("id", project_id).limit(1).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"get_analysis_by_id: {e}")
+            return None
+
 
 db = SupabaseDB()
