@@ -196,6 +196,7 @@ class GitHubPushService:
                 "repo_url": repo_url,
                 "clone_url": f"{repo_url}.git",
                 "full_name": f"{self.username}/{repo_name}",
+                "repo_name": repo_name,
             }
         except Exception as e:
             import traceback

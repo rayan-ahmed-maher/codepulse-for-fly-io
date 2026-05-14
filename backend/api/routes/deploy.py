@@ -316,16 +316,24 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
             await db.add_build_log(db_deploy_id, "INFO", "Pushing project to GitHub...")
         await deployment_store.update(tracking_id, {"status": "PUSHING_TO_GITHUB"})
 
-        # STEP 3: Verify files exist before pushing
-        print(f"Verifying project_path for git push: {req.project_path}")
-        logger.info(f"[DEPLOY] Verifying project_path for git push: {req.project_path}")
-        
+        # ── PRE-PUSH: Log exact file locations ──
+        proj_path_obj = Path(req.project_path)
+        logger.info(f"[DEPLOY] project_path for git push: {req.project_path}")
         if is_python:
-            req_file_check = Path(req.project_path) / 'requirements.txt'
-            assert req_file_check.exists(), f"requirements.txt not found at {req_file_check}!"
-            req_contents = req_file_check.read_text()
-            print(f"requirements.txt contents:\n{req_contents}")
-            logger.info(f"[DEPLOY] requirements.txt exists with {len(req_contents)} bytes")
+            req_file_check = proj_path_obj / 'requirements.txt'
+            if req_file_check.exists():
+                req_contents = req_file_check.read_text()
+                logger.info(f"[DEPLOY] ✓ requirements.txt at {req_file_check} ({len(req_contents)} bytes)")
+                print(f"[DEPLOY] requirements.txt path: {req_file_check}")
+                print(f"[DEPLOY] requirements.txt contents:\n{req_contents}")
+            else:
+                logger.error(f"[DEPLOY] ✗ requirements.txt NOT FOUND at {req_file_check}")
+                print(f"[DEPLOY] ✗ MISSING requirements.txt at {req_file_check}")
+
+            # Log all files in project root for debugging
+            root_files = [f.name for f in proj_path_obj.iterdir() if f.is_file()]
+            logger.info(f"[DEPLOY] Files in project root: {root_files}")
+            print(f"[DEPLOY] Files in project root: {root_files}")
 
         github_result = await github_push.push_project(req.project_path, req.project_name)
         if "error" in github_result:
@@ -338,27 +346,76 @@ async def _deploy_worker_inner(tracking_id: str, req: DeployRequest, db_deploy_i
             return
 
         repo_url = github_result["repo_url"]
-        logger.info(f"[DEPLOY] GitHub push complete: {repo_url} ({github_result.get('files_pushed', 0)} files)")
+        full_name = github_result.get("full_name", f"{github_push.username}/{github_push._sanitize_repo_name(req.project_name)}")
+        logger.info(f"[DEPLOY] GitHub push complete: {repo_url}")
         if db_deploy_id:
             await db.add_build_log(db_deploy_id, "SUCCESS", f"Pushed to GitHub: {repo_url}")
-            await db.add_build_log(db_deploy_id, "INFO", f"Deploying to Render from {repo_url}...")
 
-        # Step 3: Deploy to Render using the GitHub repo URL
-        # Render needs the correct rootDir if the code is in a subfolder (like /backend)
+        # ── POST-PUSH: Verify requirements.txt exists in GitHub repo ──
+        if is_python:
+            import httpx as _httpx
+            verify_headers = {
+                "Authorization": f"Bearer {github_push.token}",
+                "Accept": "application/vnd.github.v3+json",
+            }
+            # Since push_with_git does git init INSIDE project_path,
+            # the project files are at the REPO ROOT (no subfolder).
+            verify_url = f"https://api.github.com/repos/{full_name}/contents/requirements.txt"
+            try:
+                async with _httpx.AsyncClient(timeout=15) as verify_client:
+                    verify_resp = await verify_client.get(verify_url, headers=verify_headers)
+                    if verify_resp.status_code == 200:
+                        logger.info(f"[DEPLOY] ✓ POST-PUSH VERIFIED: requirements.txt exists in GitHub repo root")
+                        if db_deploy_id:
+                            await db.add_build_log(db_deploy_id, "SUCCESS", "✓ requirements.txt verified in GitHub repo")
+                    else:
+                        logger.error(f"[DEPLOY] ✗ POST-PUSH FAILED: requirements.txt NOT in GitHub repo root (HTTP {verify_resp.status_code})")
+                        logger.error(f"[DEPLOY] Verify URL: {verify_url}")
+                        if db_deploy_id:
+                            await db.add_build_log(db_deploy_id, "WARNING", f"⚠ requirements.txt not found in GitHub repo root (HTTP {verify_resp.status_code})")
+                        # Also check if it's in a subfolder
+                        for subdir in ["backend", "api", "server", "src"]:
+                            sub_url = f"https://api.github.com/repos/{full_name}/contents/{subdir}/requirements.txt"
+                            sub_resp = await verify_client.get(sub_url, headers=verify_headers)
+                            if sub_resp.status_code == 200:
+                                logger.info(f"[DEPLOY] Found requirements.txt at {subdir}/requirements.txt")
+                                if db_deploy_id:
+                                    await db.add_build_log(db_deploy_id, "INFO", f"Found requirements.txt at {subdir}/requirements.txt")
+                                break
+            except Exception as verify_err:
+                logger.warning(f"[DEPLOY] Post-push verification failed: {verify_err}")
+
+            if db_deploy_id:
+                await db.add_build_log(db_deploy_id, "INFO", f"Deploying to Render from {repo_url}...")
+
+        # ── ROOTDIR DETECTION ──
+        # push_with_git does `git init` inside project_path and pushes from there,
+        # so the project files are at the REPO ROOT. Do NOT set rootDir in this case.
+        # Only set rootDir if the project_path is inside a PRE-EXISTING git repo
+        # (i.e., .git existed BEFORE our push, meaning it's a monorepo structure).
         render_root_dir = ""
-        curr = Path(req.project_path)
-        for _ in range(3):
-            if curr == curr.parent: break
-            if (curr.parent / ".git").exists():
-                render_root_dir = str(Path(req.project_path).relative_to(curr.parent)).replace('\\', '/')
-                break
-            curr = curr.parent
-            
-        if not render_root_dir and Path(req.project_path).name in ["backend", "api", "server"]:
-            render_root_dir = Path(req.project_path).name
-            
+
+        # Check if we pushed into a fresh repo (git init was done by us) or a pre-existing one.
+        # push_with_git creates .git inside project_path, so if .git is IN project_path,
+        # files are at repo root → no rootDir needed.
+        git_in_project = (proj_path_obj / ".git").exists()
+
+        if not git_in_project:
+            # This shouldn't happen since push_with_git always creates .git,
+            # but handle it defensively: walk up to find parent .git
+            curr = proj_path_obj
+            for _ in range(3):
+                if curr == curr.parent:
+                    break
+                if (curr.parent / ".git").exists():
+                    render_root_dir = str(proj_path_obj.relative_to(curr.parent)).replace('\\', '/')
+                    break
+                curr = curr.parent
+
         if render_root_dir:
-            logger.info(f"[DEPLOY] Detected subfolder repository structure. Passing rootDir: {render_root_dir} to Render.")
+            logger.info(f"[DEPLOY] Using rootDir: {render_root_dir} (pre-existing git structure)")
+        else:
+            logger.info(f"[DEPLOY] No rootDir needed — project is at repo root")
 
         result = await orchestrator.deploy_to_render(
             project_name=req.project_name,
